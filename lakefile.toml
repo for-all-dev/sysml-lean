@@ -1,0 +1,18 @@
+name = "sysml-lean"
+version = "0.1.0"
+defaultTargets = ["Sysml", "sysml"]
+testDriver = "tests"
+
+[[lean_lib]]
+name = "Sysml"
+
+[[lean_lib]]
+name = "Examples"
+
+[[lean_exe]]
+name = "sysml"
+root = "Cli"
+
+[[lean_exe]]
+name = "tests"
+root = "Tests"
