@@ -27,6 +27,13 @@ USAGE:
   sysml check <example>
       Run the decidable well-formedness checks (model, control structure,
       STPA analysis). Exit code 1 if any fail.
+  sysml validate [<example>] [--jar PATH]
+      Round-trip the SysML emitter output through the MontiCore
+      second-source parser (MCSysMLv2.jar). Validates all registered
+      examples when no name is given. The jar is found via --jar, the
+      MCSYSML_JAR env var, or vendor/MCSysMLv2.jar; download it from
+      https://www.monticore.de/download/MCSysMLv2.jar. Exit 1 on any
+      parse error.
   sysml render <example> [--format FMT] [--stpa] [-o FILE]
       Render an example. FMT is one of:
         sysml    SysML v2 textual notation (default)
@@ -119,6 +126,36 @@ def runCheck (name : String) : IO UInt32 := do
     failed := failed || !aOk
   return if failed then (1 : UInt32) else 0
 
+private def parseValidateArgs : List String → Except String (Option String × Option String)
+  | [] => .ok (none, none)
+  | "--jar" :: p :: rest => do
+    let (ex, _) ← parseValidateArgs rest
+    .ok (ex, some p)
+  | arg :: rest =>
+    if arg.startsWith "-" then .error s!"unexpected argument '{arg}'"
+    else do
+      let (_, jar) ← parseValidateArgs rest
+      .ok (some arg, jar)
+
+def runValidate (args : List String) : IO UInt32 := do
+  let (exName, jarFlag) ← IO.ofExcept ((parseValidateArgs args).mapError IO.userError)
+  let entries ← match exName with
+    | some n => do pure [← getEntry n]
+    | none => pure Examples.registry
+  let some jar ← Sysml.Oracle.resolveJar jarFlag
+    | throw (IO.userError
+        "MCSysMLv2.jar not found: pass --jar PATH, set MCSYSML_JAR, or place it at vendor/MCSysMLv2.jar\n(download: https://www.monticore.de/download/MCSysMLv2.jar)")
+  unless (← Sysml.Oracle.javaAvailable) do
+    throw (IO.userError "java not found on PATH (a JRE ≥ 21 is required)")
+  let mut failed := false
+  for e in entries do
+    let v ← Sysml.Oracle.validateModel jar e.name e.model
+    IO.println s!"{if v.ok then "✓" else "✗"} {e.name} (oracle: MontiCore)"
+    if !v.output.isEmpty then
+      IO.println v.output
+    failed := failed || !v.ok
+  return if failed then (1 : UInt32) else 0
+
 def runList : IO UInt32 := do
   for e in Examples.registry do
     let extras := [if e.cs.isSome then some "control structure" else none,
@@ -133,6 +170,7 @@ def main (args : List String) : IO UInt32 := do
     match args with
     | ["list"] => runList
     | ["check", name] => runCheck name
+    | "validate" :: rest => runValidate rest
     | "render" :: name :: rest => runRender name rest
     | [] | ["--help"] | ["-h"] | ["help"] => IO.println usage; return (0 : UInt32)
     | _ => IO.eprintln usage; return (2 : UInt32)

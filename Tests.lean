@@ -67,14 +67,40 @@ def checks : List (String × Bool) :=
       !reachable (pumpCs.controlEdges pumpModel)
         (pumpModel.idOf "patient") (pumpModel.idOf "pumpController")) ]
 
+/-- Round-trip every registered example through the MontiCore second-source
+parser, when java and the jar are available; otherwise skip (keeps `lake
+test` dependency-free). Returns (ran, failures). -/
+def oracleChecks : IO (Nat × Nat) := do
+  let some jar ← Sysml.Oracle.resolveJar
+    | IO.println "– oracle round-trip skipped (no vendor/MCSysMLv2.jar or MCSYSML_JAR)"
+      return (0, 0)
+  unless (← Sysml.Oracle.javaAvailable) do
+    IO.println "– oracle round-trip skipped (no java on PATH)"
+    return (0, 0)
+  let mut failures := 0
+  -- negative control: the wrapper must detect the oracle's [ERROR] output
+  let broken ← Sysml.Oracle.validateText jar "broken" "package Broken { part def ; }"
+  IO.println s!"{if !broken.ok then "✓" else "✗"} oracle rejects broken input"
+  if broken.ok then failures := failures + 1
+  for e in Examples.registry do
+    let v ← Sysml.Oracle.validateModel jar e.name e.model
+    IO.println s!"{if v.ok then "✓" else "✗"} oracle round-trip: {e.name}"
+    if !v.ok then
+      IO.println v.output
+      failures := failures + 1
+  return (Examples.registry.length + 1, failures)
+
 def main : IO UInt32 := do
   let mut failures := 0
   for (name, ok) in checks do
     IO.println s!"{if ok then "✓" else "✗"} {name}"
     if !ok then failures := failures + 1
+  let (oracleRan, oracleFailures) ← oracleChecks
+  failures := failures + oracleFailures
+  let total := checks.length + oracleRan
   if failures == 0 then
-    IO.println s!"all {checks.length} tests passed"
+    IO.println s!"all {total} tests passed"
     return 0
   else
-    IO.eprintln s!"{failures} of {checks.length} tests failed"
+    IO.eprintln s!"{failures} of {total} tests failed"
     return 1

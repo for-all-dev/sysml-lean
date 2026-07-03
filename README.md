@@ -99,7 +99,24 @@ lake exe sysml render insulin-pump                          # SysML textual nota
 lake exe sysml render insulin-pump --format report          # markdown STPA report
 lake exe sysml render insulin-pump --format mermaid --stpa  # control structure
 lake exe sysml render insulin-pump --format svg --stpa -o cs.svg
+lake exe sysml validate                                     # oracle round-trip
 ```
+
+## Emitter validation (second-source oracle)
+
+`sysml validate` round-trips the textual-notation emitter through the
+[MontiCore SysML v2 parser](https://github.com/MontiCore/sysmlv2) — an
+independent second-source parser built for comparison with the OMG pilot
+implementation. Download
+[`MCSysMLv2.jar`](https://www.monticore.de/download/MCSysMLv2.jar) to
+`vendor/MCSysMLv2.jar` (or set `MCSYSML_JAR`, or pass `--jar`); a JRE ≥ 21
+is required. `lake test` runs the same round-trip automatically when the
+jar is present and skips it (staying green) when it isn't.
+
+Two tool quirks are handled in `Sysml.Oracle`: the jar exits 0 even on
+parse errors (errors are `[ERROR]` lines on stdout, which we grep), and its
+semantic checks are incomplete (fine — semantics on our side are covered by
+the `decide` certificates).
 
 Std-only: no dependencies beyond the Lean toolchain (`lean-toolchain`).
 (The community `lean4-cli` package was considered for the CLI, but its root

@@ -7,4 +7,5 @@ import Sysml.Dsl
 import Sysml.View
 import Sysml.Stpa
 import Sysml.Report
+import Sysml.Oracle
 import Sysml.Viz
