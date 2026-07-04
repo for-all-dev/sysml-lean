@@ -44,6 +44,18 @@ def javaAvailable : IO Bool := do
   catch _ =>
     return false
 
+/-- Can this JRE actually run the jar? Distinguishes "tool ran and judged
+the input" from "tool could not run" (e.g. `UnsupportedClassVersionError`
+on a JRE < 21) — otherwise a broken environment rejects *every* input and
+negative controls pass vacuously. -/
+def jarUsable (jar : System.FilePath) : IO Bool := do
+  try
+    let out ← IO.Process.output
+      { cmd := "java", args := #["-jar", jar.toString, "-h"] }
+    return out.exitCode == 0
+  catch _ =>
+    return false
+
 /-- Outcome of one oracle run. -/
 structure Verdict where
   ok : Bool

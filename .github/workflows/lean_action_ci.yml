@@ -26,6 +26,12 @@ jobs:
             echo "::warning::could not fetch oracle jar; oracle round-trip will be skipped"
           fi
 
+      - name: Set up Java 21 (oracle jar needs class file 65)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Build and test (lake build + lake test)
         uses: leanprover/lean-action@v1
 

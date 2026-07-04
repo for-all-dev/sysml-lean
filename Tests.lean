@@ -142,6 +142,9 @@ def oracleChecks : IO (Nat × Nat) := do
   unless (← Sysml.Oracle.javaAvailable) do
     IO.println "– oracle round-trip skipped (no java on PATH)"
     return (0, 0)
+  unless (← Sysml.Oracle.jarUsable jar) do
+    IO.println "– oracle round-trip skipped (jar not runnable — JRE ≥ 21 required)"
+    return (0, 0)
   let mut failures := 0
   -- negative control: the wrapper must detect the oracle's [ERROR] output
   let broken ← Sysml.Oracle.validateText jar "broken" "package Broken { part def ; }"

@@ -268,6 +268,8 @@ def runValidate (args : List String) : IO UInt32 := do
         "MCSysMLv2.jar not found: pass --jar PATH, set MCSYSML_JAR, or place it at vendor/MCSysMLv2.jar\n(download: https://www.monticore.de/download/MCSysMLv2.jar)")
   unless (← Sysml.Oracle.javaAvailable) do
     throw (IO.userError "java not found on PATH (a JRE ≥ 21 is required)")
+  unless (← Sysml.Oracle.jarUsable jar) do
+    throw (IO.userError s!"{jar} is not runnable by this JRE (≥ 21 required; check `java -version`)")
   let mut failed := false
   for e in entries do
     let v ← Sysml.Oracle.validateModel jar e.name e.model
