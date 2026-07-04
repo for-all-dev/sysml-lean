@@ -154,6 +154,15 @@ private def verdictToJson (name : String) (ok : Bool) (fs : List Finding) : Json
     ("findings", Json.arr (fs.map findingToJson).toArray)
   ]
 
+/-- Split findings against an entry's expected-findings baseline:
+(matching-baseline, unexpected, baseline-keys-not-found). -/
+private def againstBaseline (e : Examples.Entry) (fs : List Finding) :
+    List Finding × List Finding × List (String × String) :=
+  let isExpected (f : Finding) := e.expectedFindings.contains (f.check, f.subject)
+  let missing := e.expectedFindings.filter fun k =>
+    !fs.any fun f => (f.check, f.subject) = k
+  (fs.filter isExpected, fs.filter (!isExpected ·), missing)
+
 def runCheck (args : List String) : IO UInt32 := do
   let (exName, json) ← IO.ofExcept <| (Except.mapError IO.userError) <|
     match args with
@@ -169,14 +178,21 @@ def runCheck (args : List String) : IO UInt32 := do
   let mut verdicts : List Lean.Json := []
   for e in entries do
     let fs := (analysisOf e).findings
-    let ok := fs.all (·.severity ≠ .error)
+    let (expected, unexpected, missing) := againstBaseline e fs
+    let ok := unexpected.all (·.severity ≠ .error) && missing.isEmpty
     failed := failed || !ok
     if json then
+      -- Baseline-expected findings stay in the JSON (diffs key on them),
+      -- but ok reflects only deviations from the baseline.
       verdicts := verdicts ++ [verdictToJson e.name ok fs]
     else
-      IO.println s!"{if ok then "✓" else "✗"} {e.name}"
-      for f in fs do
+      let baselineNote := if expected.isEmpty then "" else
+        s!" ({expected.length} expected findings — documented gaps in source material)"
+      IO.println s!"{if ok then "✓" else "✗"} {e.name}{baselineNote}"
+      for f in unexpected do
         IO.println s!"  {severityMark f.severity} [{f.check}] {f.subject}: {f.message}"
+      for (c, s) in missing do
+        IO.println s!"  ⛔ [baseline-drift] {s}: expected finding '{c}' no longer occurs — update the baseline or restore the source"
   if json then
     IO.println (Lean.Json.arr verdicts.toArray).pretty
   return if failed then (1 : UInt32) else 0
