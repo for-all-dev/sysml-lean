@@ -116,6 +116,29 @@ def checks : List (String × Bool) :=
       && (g.splitOn "(undeveloped)").length == 4  -- 3 requirement leaves
       && (g.splitOn "G_UCA2 -> G_R2;").length == 2
       && (g.splitOn "G0 -> Ctx0").length == 2),
+    ("SACM export well-shaped",
+      let x := analysis.toSacmXml "insulin-pump"
+      let occ (pat : String) : Nat := (x.splitOn pat).length - 1
+      let expectedClaims :=
+        1 + analysis.losses.length + analysis.hazards.length + analysis.constraints.length
+          + analysis.ucas.length + analysis.requirements.length
+      let expectedInferences :=
+        analysis.losses.length
+        + (analysis.hazards.map (·.losses.length)).sum
+        + (analysis.constraints.map (·.hazards.length)).sum
+        + (analysis.ucas.map (·.hazards.length)).sum
+        + (analysis.requirements.map (·.ucas.length)).sum
+      (x.splitOn "<?xml").length == 2
+      && (x.splitOn "ArgumentPackage").length == 3  -- open + close tag
+      && occ "xmi:type=\"Claim\"" == expectedClaims
+      && occ "xmi:type=\"AssertedInference\"" == expectedInferences
+      && occ "toBeSupported=\"true\"" == analysis.requirements.length),
+    ("SACM export escapes XML",
+      let tiny : Analysis :=
+        { model := pumpModel, cs := pumpCs,
+          losses := [⟨1, "a < b & c"⟩], hazards := [], ucas := [] }
+      let x := tiny.toSacmXml
+      (x.splitOn "&lt;").length == 2 && (x.splitOn "&amp;").length == 2),
     ("markdown report contains full artifact chain",
       let md := analysis.toMarkdown
       ((md.splitOn "\n| UCA").length == 5)

@@ -70,9 +70,32 @@ work. Update statuses in place as steps land.
    head diff → sticky comment → fail-on-regression, with elan bootstrap
    and optional checksum-pinned oracle fetch.
 
-10. **Interop** (research in flight via subagent → docs/interop.agents.md):
-    maximal interop with the off-the-shelf SysML/MBSE ecosystem (Astah
-    System Safety, SysML v2 API & Services, ReqIF, SACM, ODE/DDI, CSV).
+10. [x] **Interop research** (docs/interop.agents.md): Astah System Safety
+    round-trips XMI 2.5 + SACM and platforms IPA's STAMP Workbench; SACM
+    accepted by both Astah and Adelard ASCE; ranked build order: .sysml
+    import > SACM export > ReqIF > API client > CSV.
+
+11. [~] **SACM export** (in flight via subagent, decided with Quinn
+    2026-07-04): Sysml/Sacm.lean — Analysis → SACM 2.2 XMI mirroring the
+    GSN argument structure (Claims / AssertedInference / AssertedContext /
+    ArtifactReference, requirements toBeSupported), `sysml render --format
+    sacm`. Follow-up: actually import the output into Astah/ASCE to verify
+    schema conformance (unverified until then).
+
+12. **NEXT SESSION: .sysml file import / parser sprint.** Spec agreed with
+    Quinn (subagents, straight on master): `Sysml/Parser.lean` — runtime
+    tokenizer + two-pass recursive-descent parser for the textual-notation
+    subset (mirror Sysml/Dsl.lean's walk/resolution semantics: collect
+    elements with sequential ids, then resolve typings and connector ends,
+    so forward references work); tolerate `//` and `/* */` comments and
+    flexible whitespace; `String → Except String Model`. Tests: parse ∘
+    render round-trip over every registry model (compare rendered
+    normal forms to dodge id-assignment differences), negative parse
+    cases. CLI: `sysml check <path>.sysml` and `sysml render <path>.sysml
+    --format …` — args ending in .sysml parse the file as a bare model
+    (model-level findings only). This is the front door for models
+    exported from Cameo/Syside/SysON, and starts the long-planned checker
+    sprint.
 
 ## Backlog: paper track (secondary)
 
