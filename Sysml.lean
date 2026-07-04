@@ -7,6 +7,7 @@ import Sysml.Dsl
 import Sysml.View
 import Sysml.Stpa
 import Sysml.Typing
+import Sysml.Findings
 import Sysml.Report
 import Sysml.Oracle
 import Sysml.Viz

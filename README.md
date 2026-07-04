@@ -103,7 +103,8 @@ flowchart TB
 lake build
 lake test
 lake exe sysml list
-lake exe sysml check insulin-pump
+lake exe sysml check --json                                 # findings as JSON
+lake exe sysml diff old.json new.json --markdown            # findings diff (CI/PR bot)
 lake exe sysml render insulin-pump                          # SysML textual notation
 lake exe sysml render insulin-pump --format report          # markdown STPA report
 lake exe sysml render insulin-pump --format mermaid --stpa  # control structure

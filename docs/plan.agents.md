@@ -19,23 +19,25 @@ work. Update statuses in place as steps land.
 
 ## Next: CI product track (in order)
 
-1. **Findings engine** (`Sysml/Findings.lean`): turn Bool failures into
-   structured `Finding`s (check id, severity error|warning|info, subject,
-   message) — orphaned UCAs, unconstrained hazards, uncovered
-   (path × guide-phrase) pairs, broken traces, open loops, authority
-   cycles, scenario gaps (info until step-4 sprint). `Analysis.findings`.
-   Stretch (paper-adjacent): prove `findings = [] ↔ docWellFormed`.
-2. **`sysml check [--json]`**: machine-readable verdicts — per example:
-   `{name, ok, findings: [...]}`. Human output keeps ✓/✗ but lists findings.
-3. **`sysml diff old.json new.json [--markdown]`**: classify findings as
-   introduced/fixed/unchanged between two verdict files; markdown output
-   shaped for a PR comment.
-4. **CI workflow**: extend GitHub Actions — fetch `MCSysMLv2.jar`
-   (checksum-pinned) so the oracle runs in CI; `lake test`; emit
-   report/SVG/verdicts as build artifacts.
-5. **PR comment bot**: on pull_request, run verdicts on base and head,
-   `sysml diff`, post sticky comment (`gh pr comment`) with findings diff +
-   report + control-structure diagram.
+1. [x] **Findings engine** (`Sysml/Findings.lean`): structured `Finding`s
+   (check id, severity error|warning|info, subject, message) for orphaned
+   UCAs, unconstrained hazards, coverage gaps, broken traces, open loops,
+   authority cycles, scenario gaps (info). `Analysis.findings`,
+   `Analysis.clean`. Stretch still open: prove `clean ↔ wellFormed`
+   (spot-checked in Tests.lean for now).
+2. [x] **`sysml check [--json]`**: per-example verdicts
+   `{name, ok, findings: [...]}`; human output lists findings; exit 1 on
+   error findings.
+3. [x] **`sysml diff old.json new.json [--markdown]`**: introduced/fixed
+   findings (identity = check × subject); exit 1 when errors introduced.
+4. [x] **CI workflow**: oracle fetched checksum-pinned (non-fatal on
+   network failure — test suite skips gracefully); artifacts job uploads
+   verdicts.json + per-example report/SVG.
+5. [x] **PR comment bot**: `findings-diff` job — verdicts at base and head
+   SHAs, `sysml diff --markdown`, sticky comment via
+   `gh pr comment --edit-last --create-if-none`, job fails when errors are
+   introduced. UNVERIFIED IN CI: needs a real PR to exercise (gh flags,
+   permissions, base-build fallback).
 6. **GSN / assurance-case export**: artifact chain as Goal Structuring
    Notation (losses → constraints/requirements as goal tree, `decide`
    certificates as solutions); SVG via existing dot pipeline.

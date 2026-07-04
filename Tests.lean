@@ -77,6 +77,26 @@ def checks : List (String × Bool) :=
       pumpCs.authorityAcyclic pumpModel),
     ("step-4 scenario gap visible via optional judgment",
       !analysis.scenariosCover),
+    -- findings engine
+    ("clean analysis: only info findings (step-4 gaps)",
+      analysis.clean
+      && (analysis.findings.all (·.check = "uca-no-scenario"))
+      && analysis.findings.length == 2),
+    ("orphaned UCA yields uca-orphaned finding",
+      let orphaned : Analysis := { analysis with requirements := [] }
+      (orphaned.findings.filter (·.check = "uca-orphaned")).length == 4
+      && !orphaned.clean),
+    ("authority cycle yields authority-cycle findings",
+      let cycleAnalysis : Analysis :=
+        { model := cycleModel, cs := cycleCs, losses := [], hazards := [], ucas := [] }
+      (cycleAnalysis.findings.any (·.check = "authority-cycle"))
+      && !cycleAnalysis.clean),
+    ("findings/wellFormed consistency (spot checks)",
+      (analysis.clean == analysis.wellFormed)
+      && (let orphaned : Analysis := { analysis with requirements := [] }
+          orphaned.clean == orphaned.wellFormed)
+      && (let bare : Analysis := { analysis with constraints := [] }
+          bare.clean == bare.wellFormed)),
     -- renderer smoke tests
     ("sysml render round-trips key syntax",
       let r := pumpModel.render

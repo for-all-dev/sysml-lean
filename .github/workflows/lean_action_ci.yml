@@ -1,14 +1,99 @@
-name: Lean Action CI
+name: CI
 
 on:
   push:
   pull_request:
   workflow_dispatch:
 
+env:
+  ORACLE_URL: https://www.monticore.de/download/MCSysMLv2.jar
+  ORACLE_SHA256: 0517166ea5a49aaf850b38c38b56ae5afec48a1cd674b7fd7c1b7c587a04ce20
+
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v5
-      - uses: leanprover/lean-action@v1
+
+      - name: Fetch second-source oracle (MontiCore MCSysMLv2.jar, checksum-pinned)
+        # Non-fatal on network failure: lake test skips the oracle gracefully.
+        run: |
+          mkdir -p vendor
+          if curl -sSfL -o vendor/MCSysMLv2.jar "$ORACLE_URL"; then
+            echo "$ORACLE_SHA256  vendor/MCSysMLv2.jar" | sha256sum -c - \
+              || { echo "::warning::oracle jar checksum mismatch (upstream changed?); removing"; rm vendor/MCSysMLv2.jar; }
+          else
+            echo "::warning::could not fetch oracle jar; oracle round-trip will be skipped"
+          fi
+
+      - name: Build and test (lake build + lake test)
+        uses: leanprover/lean-action@v1
+
+      - name: Install graphviz
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq graphviz
+
+      - name: Generate safety artifacts (verdicts, reports, diagrams)
+        run: |
+          mkdir -p out
+          lake exe sysml check --json > out/verdicts.json
+          lake exe sysml list | cut -d' ' -f1 | while read -r ex; do
+            lake exe sysml render "$ex" --format report -o "out/$ex-report.md" || true
+            lake exe sysml render "$ex" --format svg --stpa -o "out/$ex-cs.svg" || true
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: safety-artifacts
+          path: out/
+
+  findings-diff:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install elan
+        run: |
+          curl -sSfL https://elan.lean-lang.org/elan-init.sh | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      # `check --json` exits 1 when error findings exist but still emits
+      # valid JSON, so keep the output on nonzero exit; fall back to [] only
+      # when nothing was produced (e.g. base predates the subcommand).
+      - name: Verdicts for base
+        run: |
+          git checkout ${{ github.event.pull_request.base.sha }}
+          lake exe sysml check --json > /tmp/old.json || true
+          [ -s /tmp/old.json ] || echo "[]" > /tmp/old.json
+
+      - name: Verdicts for head
+        run: |
+          git checkout ${{ github.event.pull_request.head.sha }}
+          lake exe sysml check --json > /tmp/new.json || true
+          [ -s /tmp/new.json ] || echo "[]" > /tmp/new.json
+
+      - name: Diff findings and comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          lake exe sysml diff /tmp/old.json /tmp/new.json --markdown > /tmp/diff.md
+          status=$?
+          set -e
+          {
+            echo "<!-- sysml-findings-diff -->"
+            cat /tmp/diff.md
+            echo
+            if [ "$status" -ne 0 ]; then
+              echo "⛔ **error findings introduced — the analysis regressed.**"
+            else
+              echo "✅ no error findings introduced."
+            fi
+          } > /tmp/comment.md
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --body-file /tmp/comment.md --edit-last --create-if-none
+          exit $status
