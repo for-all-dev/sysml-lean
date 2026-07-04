@@ -13,6 +13,27 @@ of the renderers.
 open Sysml.Kernel Sysml.Stpa Sysml.View
 open Examples.InsulinPump
 
+-- Two controllers commanding each other: information flow may loop, but
+-- the *authority* relation must not — this model must be rejected.
+sysml cycleModel {
+  part def Ctrl;
+  part a : Ctrl {
+    out port cmd;
+    in port rcv;
+  }
+  part b : Ctrl {
+    out port cmd;
+    in port rcv;
+  }
+  flow f1 from a.cmd to b.rcv;
+  flow f2 from b.cmd to a.rcv;
+}
+
+def cycleCs : ControlStructure where
+  roles := [(cycleModel.idOf "a", .controller), (cycleModel.idOf "b", .controller)]
+  controlPaths := [cycleModel.idOf "f1", cycleModel.idOf "f2"]
+  feedbackPaths := []
+
 def checks : List (String × Bool) :=
   -- positives (mirrors the theorems; cheap sanity that the exe agrees)
   [ ("model well-formed", pumpModel.wellFormed),
@@ -44,6 +65,18 @@ def checks : List (String × Bool) :=
     ("untraceable hazard detected",
       let bad : Analysis := { analysis with hazards := analysis.hazards ++ [{ id := 9, desc := "orphan", losses := [42] }] }
       !bad.hazardsTraceable),
+    ("orphaned UCA detected (totality)",
+      let orphaned : Analysis := { analysis with requirements := analysis.requirements.drop 1 }
+      !orphaned.ucasRefined && !orphaned.docWellFormed),
+    ("unconstrained hazard detected (totality)",
+      let bare : Analysis := { analysis with constraints := [] }
+      !bare.hazardsConstrained && !bare.docWellFormed),
+    ("authority cycle detected",
+      !cycleCs.authorityAcyclic cycleModel && !cycleCs.wellFormed cycleModel),
+    ("insulin pump authority is acyclic",
+      pumpCs.authorityAcyclic pumpModel),
+    ("step-4 scenario gap visible via optional judgment",
+      !analysis.scenariosCover),
     -- renderer smoke tests
     ("sysml render round-trips key syntax",
       let r := pumpModel.render
@@ -55,8 +88,12 @@ def checks : List (String × Bool) :=
     ("mermaid output shaped correctly",
       let mm := pumpCs.toMermaid pumpModel
       (mm.splitOn "flowchart TB").length == 2 && (mm.splitOn "-.->").length == 3),
-    ("markdown report contains UCA table",
-      ((analysis.toMarkdown).splitOn "| UCA").length == 5),
+    ("markdown report contains full artifact chain",
+      let md := analysis.toMarkdown
+      ((md.splitOn "\n| UCA").length == 5)
+      && ((md.splitOn "\n| SC").length == 4)
+      && ((md.splitOn "\n| R").length == 4)
+      && ((md.splitOn "\n| S1 |").length == 2 && (md.splitOn "\n| S2 |").length == 2)),
     -- view-layer behavior
     ("part-level links recovered",
       (links pumpModel).length == 4),

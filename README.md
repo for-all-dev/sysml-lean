@@ -30,10 +30,19 @@ Two layers over a shared core, with STPA on top:
 - **`Sysml.View`** — curated typed projections: recovers the part-level
   connection graph (who talks to whom) from the port-level model.
 - **`Sysml.Stpa`** — STPA over the view: control structures with roles
-  (controller / actuator / sensor / controlled process), closed-control-loop
-  checking via reachability, losses, hazards (tagged `safety`/`security`,
-  so STPA-Sec drops in), the four UCA kinds, and coverage/traceability
-  conditions for a whole analysis.
+  (controller / actuator / sensor / controlled process), the authority
+  relation (must be a DAG) kept separate from information flow (may loop),
+  closed-control-loop checking via reachability, and the full artifact
+  chain — losses, hazards (tagged `safety`/`security`, so STPA-Sec drops
+  in), system constraints, the four UCA kinds, controller requirements,
+  loss scenarios — with traceability, coverage, and *totality* checks
+  (every hazard constrained; every UCA refined by a requirement).
+- **`Sysml.Typing`** — the type-system view (see
+  `docs/stpa-typesystem.pdf`): the document checks restated as Prop-level
+  typing judgments (`WellTyped`), with reflection theorems proving the
+  executable checker decides them exactly — an *orphaned UCA* (no derived
+  requirement) is precisely a non-exhaustiveness error, and `by decide`
+  certifies concrete documents against the judgments.
 
 ## Worked example
 

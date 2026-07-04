@@ -1,5 +1,6 @@
 import Sysml.Dsl
 import Sysml.Stpa
+import Sysml.Typing
 import Sysml.Viz
 
 /-!
@@ -90,6 +91,17 @@ def hazards : List Hazard := [
     kind := .security, losses := [1, 2] }
 ]
 
+/-- STPA step 1: system-level constraints, one or more per hazard
+(hazard totality: every hazard must be addressed by ≥ 1 constraint). -/
+def constraints : List SystemConstraint := [
+  { id := 1, desc := "The pump shall not deliver insulin while blood glucose is at or below threshold",
+    hazards := [1] },
+  { id := 2, desc := "The pump shall deliver insulin within T of sustained high blood glucose",
+    hazards := [2] },
+  { id := 3, desc := "The pump shall act only on authenticated controller commands",
+    hazards := [3] }
+]
+
 /-- STPA step 3: unsafe control actions for the `deliverCmd` control path. -/
 def ucas : List Uca := [
   { id := 1, action := pid "deliverCmd", kind := .notProviding,
@@ -109,14 +121,35 @@ def notApplicable : List (ElementId × UcaKind × String) :=
   UcaKind.all.map fun k =>
     (pid "insulinFlow", k, "physical delivery path; unsafe behavior analyzed on deliverCmd")
 
+/-- Controller requirements refining the UCAs — the totality obligation:
+every UCA must be refined by at least one of these (an orphaned UCA is a
+non-exhaustiveness error, docs/stpa-typesystem.pdf). -/
+def requirements : List Requirement := [
+  { id := 1, desc := "The controller shall command a bolus within T of CGM readings sustained above threshold",
+    ucas := [1, 3] },
+  { id := 2, desc := "The controller shall not command insulin when the latest CGM reading is at or below threshold",
+    ucas := [2] },
+  { id := 3, desc := "The controller shall bound each commanded dose and terminate delivery at the commanded amount",
+    ucas := [4] }
+]
+
+/-- STPA step 4 (initial): loss scenarios explaining how UCAs could occur. -/
+def scenarios : List Scenario := [
+  ⟨1, 2, "CGM sensor bias reads high while actual glucose is low; controller commands a bolus from a stale process model"⟩,
+  ⟨2, 1, "readingFlow drops out; controller waits on feedback and never commands insulin despite sustained hyperglycemia"⟩
+]
+
 /-- The assembled STPA analysis. -/
 def analysis : Analysis where
   model := pumpModel
   cs := pumpCs
   losses := losses
   hazards := hazards
+  constraints := constraints
   ucas := ucas
   notApplicable := notApplicable
+  requirements := requirements
+  scenarios := scenarios
 
 /-! ## Certificates -/
 
@@ -130,6 +163,13 @@ theorem pumpCs_wellFormed : pumpCs.wellFormed pumpModel = true := by decide
 /-- The full STPA analysis is well-formed: traceable hazards and UCAs, and
 all four UCA kinds covered for every control path. -/
 theorem analysis_wellFormed : analysis.wellFormed = true := by decide
+
+/-- The analysis document is well-typed in the sense of the STPA type
+system (docs/stpa-typesystem.pdf): every artifact well-kinded, every hazard
+addressed by a system constraint, every UCA refined by a controller
+requirement — no orphans. `decide` works on the Prop-level judgment via the
+reflection theorem `Analysis.wellTyped_iff`. -/
+theorem analysis_wellTyped : WellTyped analysis := by decide
 
 -- Round-trip: print the elaborated model back as SysML textual notation.
 -- #sysml pumpModel

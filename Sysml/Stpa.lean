@@ -34,7 +34,20 @@ deriving DecidableEq, Repr
 
 /-- A functional control structure over a SysML model: a role assignment for
 part usages, and a classification of connections/flows as control-action
-paths or feedback paths. -/
+paths or feedback paths.
+
+Two relations live over the same node set and must not be conflated
+(docs/stpa-typesystem.pdf §1):
+
+- the *authority* relation — control edges between controllers — whose
+  transitive closure must be acyclic (`authorityAcyclic`): command
+  hierarchies do not loop;
+- the *information-flow* relation — control together with feedback — which
+  may and should contain cycles (that is what a closed control loop is).
+
+Accordingly, reachability is only ever checked within one relation at a
+time (`controlLoopsClosed` uses control edges and feedback edges
+separately), never over their union. -/
 structure ControlStructure where
   /-- Role of each participating part usage. -/
   roles : List (ElementId × Role)
@@ -87,6 +100,20 @@ def pathsWellFormed (cs : ControlStructure) (m : Model) : Bool :=
        | some .sensor, some .controller => true
        | _, _ => false)
 
+/-- The authority relation: control edges whose endpoints are both
+controllers (hierarchical command). -/
+def authorityEdges (cs : ControlStructure) (m : Model) : List (ElementId × ElementId) :=
+  (cs.controlEdges m).filter fun (s, t) =>
+    cs.roleOf? s = some .controller && cs.roleOf? t = some .controller
+
+/-- The authority relation is a DAG: no controller commands itself, directly
+or transitively (docs/stpa-typesystem.pdf §1). Detected per edge: an edge
+`s → t` closing a cycle is exactly one where `t` reaches back to `s` (or
+`s = t`). -/
+def authorityAcyclic (cs : ControlStructure) (m : Model) : Bool :=
+  let auth := cs.authorityEdges m
+  auth.all fun (s, t) => s ≠ t && !reachable auth t s
+
 /-- The defining property of a *closed* control loop: whenever a controller
 can influence a process via control paths, some feedback path chain leads
 back from that process to that controller (STPA Handbook §2.2; a controller
@@ -101,9 +128,11 @@ def controlLoopsClosed (cs : ControlStructure) (m : Model) : Bool :=
         else true
     else true
 
-/-- All structural conditions on a control structure. -/
+/-- All structural conditions on a control structure: role and path
+well-kindedness, an acyclic authority hierarchy, and closed control loops. -/
 def wellFormed (cs : ControlStructure) (m : Model) : Bool :=
-  cs.rolesWellFormed m && cs.pathsWellFormed m && cs.controlLoopsClosed m
+  cs.rolesWellFormed m && cs.pathsWellFormed m && cs.authorityAcyclic m
+    && cs.controlLoopsClosed m
 
 end ControlStructure
 
@@ -159,23 +188,53 @@ structure Uca where
   hazards : List Nat
 deriving Repr
 
-/-- A loss scenario (STPA step 4). Stub — elaborated in a later sprint. -/
+/-- A system-level constraint: a condition the system must satisfy to
+prevent one or more hazards (STPA Handbook, step 1). -/
+structure SystemConstraint where
+  id : Nat
+  desc : String
+  /-- Hazards this constraint prevents/mitigates. Must be nonempty. -/
+  hazards : List Nat
+deriving Repr
+
+/-- A controller constraint or requirement, derived from (refining) one or
+more UCAs (STPA Handbook, step 3). The totality judgment of the analysis
+demands that every UCA be refined by at least one of these — an orphaned
+UCA is a non-exhaustiveness error (docs/stpa-typesystem.pdf).
+
+`element` optionally binds the requirement to a SysML `requirementUsage`
+in the model, tying the analysis document into the model proper. -/
+structure Requirement where
+  id : Nat
+  desc : String
+  /-- UCAs this requirement refines. Must be nonempty. -/
+  ucas : List Nat
+  element : Option ElementId := none
+deriving Repr
+
+/-- A loss scenario: a causal explanation of how a UCA could occur
+(STPA step 4). Causal-factor structure is a later sprint; for now a
+scenario traces to its UCA with an informal description. -/
 structure Scenario where
   id : Nat
   uca : Nat
   desc : String
 deriving Repr
 
-/-- A full STPA analysis of a SysML model. -/
+/-- A full STPA analysis of a SysML model. The artifacts form the dependency
+chain losses ← hazards ← {system constraints, UCAs} ← requirements ←
+scenarios (docs/stpa-typesystem.pdf §1). -/
 structure Analysis where
   model : Model
   cs : ControlStructure
   losses : List Loss
   hazards : List Hazard
+  constraints : List SystemConstraint := []
   ucas : List Uca
   /-- Explicit not-applicable verdicts: (control path, UCA kind, rationale).
   Coverage demands each pair be either a UCA or a justified N/A. -/
   notApplicable : List (ElementId × UcaKind × String) := []
+  requirements : List Requirement := []
   scenarios : List Scenario := []
 deriving Repr
 
@@ -194,23 +253,71 @@ def ucasTraceable (a : Analysis) : Bool :=
     && !u.hazards.isEmpty
     && u.hazards.all fun h => a.hazards.any (·.id = h)
 
+/-- Constraint traceability: every system constraint maps to ≥ 1 existing
+hazard. -/
+def constraintsTraceable (a : Analysis) : Bool :=
+  a.constraints.all fun c =>
+    !c.hazards.isEmpty && c.hazards.all fun h => a.hazards.any (·.id = h)
+
+/-- Hazard totality: every hazard is addressed by ≥ 1 system constraint. -/
+def hazardsConstrained (a : Analysis) : Bool :=
+  a.hazards.all fun h => a.constraints.any fun c => c.hazards.contains h.id
+
 /-- UCA coverage: for every control path and every one of the four UCA
 kinds, there is either a UCA or an explicit, justified N/A verdict. -/
 def ucasCover (a : Analysis) : Bool :=
   a.cs.controlPaths.all fun c =>
     UcaKind.all.all fun k =>
       a.ucas.any (fun u => u.action = c && u.kind = k)
-      || a.notApplicable.any (fun (c', k', _) => c' = c && k' = k)
+      || a.notApplicable.any (fun na => na.1 = c && na.2.1 = k)
+
+/-- Requirement traceability: every requirement refines ≥ 1 existing UCA
+(and, when bound to the model, points at a requirement usage). -/
+def requirementsTraceable (a : Analysis) : Bool :=
+  a.requirements.all fun r =>
+    !r.ucas.isEmpty && r.ucas.all (fun u => a.ucas.any (·.id = u))
+    && (match r.element with
+        | some e => a.model.kindOf? e = some .requirementUsage
+        | none => true)
+
+/-- UCA totality — the central judgment (docs/stpa-typesystem.pdf): every
+UCA is refined by ≥ 1 controller requirement. An orphaned UCA is exactly a
+non-exhaustiveness error. -/
+def ucasRefined (a : Analysis) : Bool :=
+  a.ucas.all fun u => a.requirements.any fun r => r.ucas.contains u.id
+
+/-- Scenario traceability: every loss scenario explains an existing UCA. -/
+def scenariosTraceable (a : Analysis) : Bool :=
+  a.scenarios.all fun s => a.ucas.any (·.id = s.uca)
+
+/-- Scenario totality (STPA step 4): every UCA has ≥ 1 loss scenario.
+Deliberately *not* part of `wellFormed` yet — scenarios are elaborated in a
+later sprint — but exposed so an analysis can opt into full step-4 coverage. -/
+def scenariosCover (a : Analysis) : Bool :=
+  a.ucas.all fun u => a.scenarios.any (·.uca = u.id)
+
+/-- All document-level judgments: referential well-kindedness of every
+artifact plus the two totality conditions (hazards constrained, UCAs
+refined). This is the Bool decision procedure for `Sysml.Stpa.WellTyped`
+(see `Sysml.Typing`). -/
+def docWellFormed (a : Analysis) : Bool :=
+  a.hazardsTraceable
+  && a.constraintsTraceable
+  && a.hazardsConstrained
+  && a.ucasTraceable
+  && a.ucasCover
+  && a.requirementsTraceable
+  && a.ucasRefined
+  && a.scenariosTraceable
 
 /-- The whole analysis is well-formed: the model is well-formed SysML, the
-control structure is a closed-loop structure over it, and the STPA artifacts
-are traceable and complete. -/
+control structure is a closed-loop structure with an acyclic authority
+hierarchy over it, and the analysis document is well-typed (traceable,
+covered, and total). -/
 def wellFormed (a : Analysis) : Bool :=
   a.model.wellFormed
   && a.cs.wellFormed a.model
-  && a.hazardsTraceable
-  && a.ucasTraceable
-  && a.ucasCover
+  && a.docWellFormed
 
 end Analysis
 
