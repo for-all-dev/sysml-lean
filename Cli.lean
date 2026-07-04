@@ -47,6 +47,8 @@ USAGE:
         mermaid  Mermaid flowchart (GitHub-renderable)
         svg      SVG via graphviz `dot` (requires -o FILE)
         report   markdown STPA report (requires the example to have an analysis)
+        gsn      GSN assurance-case skeleton as graphviz DOT
+        gsn-svg  GSN skeleton as SVG via `dot` (requires -o FILE)
       --stpa renders the STPA control structure (roles, control/feedback
       edges) instead of the plain part-connection graph; applies to
       dot/mermaid/svg.
@@ -111,7 +113,16 @@ def runRender (name : String) (args : List String) : IO UInt32 := do
     match e.analysis with
     | some a => emit o (a.toMarkdown s!"STPA report: {e.name}")
     | none => throw (IO.userError s!"example '{e.name}' has no STPA analysis")
-  | f => throw (IO.userError s!"unknown format '{f}' (sysml|dot|mermaid|svg|report)")
+  | "gsn" =>
+    match e.analysis with
+    | some a => emit o (a.toGsnDot e.name)
+    | none => throw (IO.userError s!"example '{e.name}' has no STPA analysis")
+  | "gsn-svg" =>
+    match e.analysis, o.out with
+    | some a, some path => dotToSvgFile (a.toGsnDot e.name) path
+    | none, _ => throw (IO.userError s!"example '{e.name}' has no STPA analysis")
+    | _, none => throw (IO.userError "gsn-svg format requires -o FILE")
+  | f => throw (IO.userError s!"unknown format '{f}' (sysml|dot|mermaid|svg|report|gsn|gsn-svg)")
   return 0
 
 /-- The analysis to check for an entry: the registered one, or a bare

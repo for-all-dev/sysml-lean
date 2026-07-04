@@ -39,6 +39,7 @@ jobs:
           lake exe sysml list | cut -d' ' -f1 | while read -r ex; do
             lake exe sysml render "$ex" --format report -o "out/$ex-report.md" || true
             lake exe sysml render "$ex" --format svg --stpa -o "out/$ex-cs.svg" || true
+            lake exe sysml render "$ex" --format gsn-svg -o "out/$ex-gsn.svg" || true
           done
 
       - uses: actions/upload-artifact@v4

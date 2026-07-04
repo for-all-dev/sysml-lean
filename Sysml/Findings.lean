@@ -43,13 +43,6 @@ private def finding (check : String) (subject message : String)
     (severity : Severity := .error) : Finding :=
   { check, severity, subject, message }
 
-/-- Human-readable guide-phrase label (shared with reports). -/
-def UcaKind.label : UcaKind → String
-  | .notProviding => "not providing"
-  | .providing => "providing"
-  | .wrongTiming => "too early / too late / out of order"
-  | .wrongDuration => "stopped too soon / applied too long"
-
 namespace Analysis
 
 private def edgeName (a : Analysis) (e : ElementId × ElementId) : String :=

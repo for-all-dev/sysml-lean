@@ -175,6 +175,13 @@ deriving DecidableEq, Repr
 def UcaKind.all : List UcaKind :=
   [.notProviding, .providing, .wrongTiming, .wrongDuration]
 
+/-- Human-readable guide-phrase label (reports, findings, diagrams). -/
+def UcaKind.label : UcaKind → String
+  | .notProviding => "not providing"
+  | .providing => "providing"
+  | .wrongTiming => "too early / too late / out of order"
+  | .wrongDuration => "stopped too soon / applied too long"
+
 /-- An unsafe control action: a control action (a control path in the model)
 that, in a given context, is hazardous in one of the four ways. -/
 structure Uca where

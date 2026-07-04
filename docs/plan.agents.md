@@ -38,9 +38,13 @@ work. Update statuses in place as steps land.
    `gh pr comment --edit-last --create-if-none`, job fails when errors are
    introduced. UNVERIFIED IN CI: needs a real PR to exercise (gh flags,
    permissions, base-build fallback).
-6. **GSN / assurance-case export**: artifact chain as Goal Structuring
-   Notation (losses → constraints/requirements as goal tree, `decide`
-   certificates as solutions); SVG via existing dot pipeline.
+6. [x] **GSN / assurance-case export** (`Sysml/Gsn.lean`,
+   `sysml render --format gsn|gsn-svg`): root → losses → hazards →
+   constraints/UCA-negations → requirements (rendered *undeveloped* —
+   honest: the Lean certificate evidences document structure, not
+   requirement satisfaction); scenarios as context nodes; certificate
+   status as top-level context. Behavioral evidence attachment is the
+   later-sprint follow-up.
 7. **LLM-in-the-loop prototype** (after --json): propose UCAs/scenarios,
    reject ill-typed output, feed findings diff back. "Generate, then
    verify."

@@ -108,6 +108,14 @@ def checks : List (String × Bool) :=
     ("mermaid output shaped correctly",
       let mm := pumpCs.toMermaid pumpModel
       (mm.splitOn "flowchart TB").length == 2 && (mm.splitOn "-.->").length == 3),
+    ("GSN export contains the goal chain",
+      let g := analysis.toGsnDot "insulin-pump"
+      (g.splitOn "[label=\"G_L").length == 3       -- 2 loss goals
+      && (g.splitOn "[label=\"G_H").length == 4    -- 3 hazard goals
+      && (g.splitOn "[label=\"G_UCA").length == 5  -- 4 UCA goals
+      && (g.splitOn "(undeveloped)").length == 4  -- 3 requirement leaves
+      && (g.splitOn "G_UCA2 -> G_R2;").length == 2
+      && (g.splitOn "G0 -> Ctx0").length == 2),
     ("markdown report contains full artifact chain",
       let md := analysis.toMarkdown
       ((md.splitOn "\n| UCA").length == 5)
