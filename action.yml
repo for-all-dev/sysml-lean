@@ -1,0 +1,53 @@
+name: "STPA Safety Findings"
+description: "Machine-checked STPA safety-analysis findings as a CI gate — check, diff vs base, sticky PR comment, fail on regression."
+author: "for-all.dev"
+
+branding:
+  icon: "shield"
+  color: "purple"
+
+inputs:
+  github-token:
+    description: "Token used to read PR metadata and post the sticky comment."
+    required: false
+    default: ${{ github.token }}
+  working-directory:
+    description: "Directory containing the Lean project (lakefile.toml)."
+    required: false
+    default: "."
+  comment:
+    description: "Post/refresh the sticky PR comment on pull_request events."
+    required: false
+    default: "true"
+  fail-on-regression:
+    description: "Fail the action when error findings are introduced relative to the PR base."
+    required: false
+    default: "true"
+  install-elan:
+    description: "Install the Lean toolchain manager (elan) if `lake` is not already on PATH."
+    required: false
+    default: "true"
+  oracle-jar-url:
+    description: "Optional URL for the MCSysMLv2.jar second-source oracle, fetched into vendor/."
+    required: false
+    default: ""
+  oracle-sha256:
+    description: "Expected sha256 checksum of the oracle jar; mismatch discards the jar with a warning."
+    required: false
+    default: ""
+
+outputs:
+  regressed:
+    description: "\"true\" if error findings were introduced relative to the PR base, \"false\" otherwise."
+  introduced:
+    description: "Count of findings introduced relative to the PR base."
+  fixed:
+    description: "Count of findings fixed relative to the PR base."
+  verdicts-path:
+    description: "Path to the head verdicts JSON file."
+  diff-markdown-path:
+    description: "Path to the rendered diff markdown file."
+
+runs:
+  using: "node20"
+  main: "action/dist/index.js"

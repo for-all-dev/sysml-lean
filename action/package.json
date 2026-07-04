@@ -1,0 +1,23 @@
+{
+  "name": "sysml-lean-action",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GitHub Action wrapper around the sysml-lean STPA safety-analysis CLI: check, diff vs base, sticky PR comment, fail on regression.",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "ncc build src/main.ts -o dist --minify",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@actions/core": "^1.11.1",
+    "@actions/exec": "^1.1.1",
+    "@actions/github": "^6.0.0",
+    "@actions/io": "^1.1.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.9",
+    "@vercel/ncc": "^0.38.1",
+    "typescript": "^5.5.4"
+  }
+}
