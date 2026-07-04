@@ -40,8 +40,10 @@ work. Update statuses in place as steps land.
 5. [x] **PR comment bot**: `findings-diff` job — verdicts at base and head
    SHAs, `sysml diff --markdown`, sticky comment via
    `gh pr comment --edit-last --create-if-none`, job fails when errors are
-   introduced. UNVERIFIED IN CI: needs a real PR to exercise (gh flags,
-   permissions, base-build fallback).
+   introduced. VERIFIED 2026-07-04 on throwaway PR #1: sticky comment with
+   the introduced `uca-orphaned UCA4` error posted, findings-diff check
+   failed as designed, build job failed independently (lake test catches
+   the same regression). PR closed unmerged, branch deleted.
 6. [x] **GSN / assurance-case export** (`Sysml/Gsn.lean`,
    `sysml render --format gsn|gsn-svg`): root → losses → hazards →
    constraints/UCA-negations → requirements (rendered *undeveloped* —
@@ -49,9 +51,20 @@ work. Update statuses in place as steps land.
    requirement satisfaction); scenarios as context nodes; certificate
    status as top-level context. Behavioral evidence attachment is the
    later-sprint follow-up.
-7. **LLM-in-the-loop prototype** (after --json): propose UCAs/scenarios,
-   reject ill-typed output, feed findings diff back. "Generate, then
-   verify."
+7. [~] **LLM-in-the-loop prototype**: `sysml suggest <example> [--llm M]`
+   (decided with Quinn 2026-07-04: claude -p CLI invocation; scope =
+   scenarios for uca-no-scenario gaps only). Every candidate is gated by
+   the checker (real gap UCA, traceability preserved) before display;
+   rejected candidates reported as rejected; output is paste-ready Lean.
+   IN PROGRESS — implemented, needs a live run against the wheel-brake
+   faithful fixture (3 scenario gaps) once fixtures land.
+
+8. **Case-study fixtures** (in flight via subagent): faithful transcription
+   of the STPA Handbook wheel-brake tables (expected to pin exactly 17
+   findings — the checker quantifying the published example's self-declared
+   incompleteness, incl. the Table 2.3 vs 2.5 UCA-2 hazard-trace
+   inconsistency we found), plus riffs: a certified-total completion and an
+   STPA-Sec extension.
 
 ## Backlog: paper track (secondary)
 

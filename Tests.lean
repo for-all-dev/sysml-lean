@@ -130,7 +130,16 @@ def checks : List (String × Bool) :=
         (pumpModel.idOf "pumpController") (pumpModel.idOf "patient")),
     ("reachability: not backwards",
       !reachable (pumpCs.controlEdges pumpModel)
-        (pumpModel.idOf "patient") (pumpModel.idOf "pumpController")) ]
+        (pumpModel.idOf "patient") (pumpModel.idOf "pumpController")),
+    -- wheel-brake fixtures
+    ("wheel-brake: published partial tables yield exactly the pinned gaps",
+      Examples.WheelBrake.analysis.findings.map (fun f => (f.check, f.subject)) == Examples.WheelBrake.expectedGaps
+      && !Examples.WheelBrake.analysis.docWellFormed),
+    ("wheel-brake-completed: total",
+      Examples.WheelBrakeCompleted.analysis.clean && Examples.WheelBrakeCompleted.analysis.wellFormed),
+    ("wheel-brake-sec: total with security hazards",
+      Examples.WheelBrakeSec.analysis.clean
+      && (Examples.WheelBrakeSec.analysis.hazards.filter (·.kind == Sysml.Stpa.HarmKind.security)).length == 2) ]
 
 /-- Round-trip every registered example through the MontiCore second-source
 parser, when java and the jar are available; otherwise skip (keeps `lake

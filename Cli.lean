@@ -40,6 +40,11 @@ USAGE:
       MCSYSML_JAR env var, or vendor/MCSysMLv2.jar; download it from
       https://www.monticore.de/download/MCSysMLv2.jar. Exit 1 on any
       parse error.
+  sysml suggest <example> [--llm MODEL]
+      Ask an LLM (via the claude CLI) to draft loss scenarios for UCAs the
+      checker reports as uncovered; every candidate is validated against
+      the analysis before being shown — generate, then verify. Prints
+      paste-ready Lean. Exit 1 if gaps remain.
   sysml render <example> [--format FMT] [--stpa] [-o FILE]
       Render an example. FMT is one of:
         sysml    SysML v2 textual notation (default)
@@ -295,6 +300,105 @@ def runValidate (args : List String) : IO UInt32 := do
     failed := failed || !v.ok
   return if failed then (1 : UInt32) else 0
 
+/-! ## `sysml suggest`: LLM-proposed loss scenarios, gated by the checker
+
+"Generate, then verify": an LLM drafts candidate loss scenarios for the
+UCAs the findings engine reports as uncovered (`uca-no-scenario`); every
+candidate is validated against the analysis (does it cite a real gap UCA?
+does adding it close the gap without breaking traceability?) before it is
+shown. Rejected candidates are reported as rejected — the type system is
+what makes LLM assistance defensible here. -/
+
+private def claudeAvailable : IO Bool := do
+  try
+    let out ← IO.Process.output { cmd := "claude", args := #["--version"] }
+    return out.exitCode == 0
+  catch _ =>
+    return false
+
+private def hazardDesc (a : Analysis) (id : Nat) : String :=
+  match a.hazards.find? (·.id = id) with
+  | some h => h.desc
+  | none => s!"H{id}"
+
+private def suggestPrompt (a : Analysis) (gaps : List Uca) : String :=
+  let existing := String.join <| a.scenarios.map fun s =>
+    s!"- (for UCA{s.uca}) {s.desc}\n"
+  let gapLines := String.join <| gaps.map fun u =>
+    s!"- UCA{u.id}: control action '{a.model.nameOf u.action}', type '{u.kind.label}', context: {u.context}; leads to hazards: "
+      ++ String.intercalate " | " (u.hazards.map (hazardDesc a)) ++ "\n"
+  "You are assisting a System-Theoretic Process Analysis (STPA, Leveson & Thomas). "
+    ++ "A loss scenario explains causal factors by which an unsafe control action (UCA) could occur: "
+    ++ "controller/process-model flaws, missing or inadequate feedback, actuator behavior, component faults, or unsafe interactions.\n\n"
+    ++ "The system model (SysML v2 textual notation):\n\n" ++ a.model.render
+    ++ "\nExisting loss scenarios, for style (one causal sentence each):\n" ++ existing
+    ++ "\nThe following UCAs have NO loss scenario yet. Propose exactly one plausible, "
+    ++ "specific loss scenario for EACH, grounded in the control structure above.\n" ++ gapLines
+    ++ "\nRespond with ONLY a JSON array, no markdown fences, no commentary: "
+    ++ "[{\"uca\": <number>, \"desc\": \"<one-sentence causal scenario>\"}, …]"
+
+/-- Extract the first-to-last `[…]` span from possibly-chatty LLM output. -/
+private def extractJsonArray (s : String) : Option String := do
+  let cs := s.toList
+  let start ← cs.findIdx? (· = '[')
+  let fromEnd ← cs.reverse.findIdx? (· = ']')
+  let stop := cs.length - fromEnd
+  if stop ≤ start then none
+  else some (String.ofList ((cs.drop start).take (stop - start)))
+
+def runSuggest (name : String) (args : List String) : IO UInt32 := do
+  let llmModel? ← match args with
+    | [] => pure none
+    | ["--llm", m] => pure (some m)
+    | _ => throw (IO.userError "usage: sysml suggest <example> [--llm MODEL]")
+  let e ← getEntry name
+  let a := analysisOf e
+  let gapIds := (a.findings.filter (·.check = "uca-no-scenario")).map (·.subject)
+  let gaps := a.ucas.filter fun u => gapIds.contains s!"UCA{u.id}"
+  if gaps.isEmpty then
+    IO.println s!"{name}: no scenario gaps — nothing to suggest"
+    return 0
+  unless (← claudeAvailable) do
+    throw (IO.userError "claude CLI not found on PATH (needed for suggestions)")
+  IO.println s!"asking the LLM for {gaps.length} scenario(s) — this can take a minute …"
+  let modelArgs := match llmModel? with
+    | some m => #["--model", m]
+    | none => #[]
+  let out ← IO.Process.output
+    { cmd := "claude", args := #["-p", suggestPrompt a gaps] ++ modelArgs }
+  if out.exitCode != 0 then
+    throw (IO.userError s!"claude failed: {out.stderr}")
+  let some arrText := extractJsonArray out.stdout
+    | throw (IO.userError s!"no JSON array in LLM output:\n{out.stdout}")
+  let parsed ← IO.ofExcept <| (Except.mapError fun e => IO.userError s!"bad LLM JSON: {e}") <| do
+    let j ← Lean.Json.parse arrText
+    let arr ← j.getArr?
+    arr.toList.mapM fun v => do
+      let uca ← v.getObjValAs? Nat "uca"
+      let desc ← v.getObjValAs? String "desc"
+      return (uca, desc)
+  -- Gate every candidate through the checker before showing it.
+  let freshBase := (a.scenarios.map (·.id)).foldl max 0
+  let mut accepted : List Scenario := []
+  for (uca, desc) in parsed do
+    if !gaps.any (·.id = uca) then
+      IO.println s!"✗ rejected: UCA{uca} is not an open scenario gap"
+    else if desc.trimAscii.isEmpty then
+      IO.println s!"✗ rejected: empty scenario for UCA{uca}"
+    else
+      accepted := accepted ++ [⟨freshBase + accepted.length + 1, uca, desc⟩]
+  let a' := { a with scenarios := a.scenarios ++ accepted }
+  unless a'.scenariosTraceable do
+    throw (IO.userError "internal: accepted suggestions broke scenario traceability")
+  let closed := gaps.filter fun u => a'.scenarios.any (·.uca = u.id)
+  let remaining := gaps.filter fun u => !a'.scenarios.any (·.uca = u.id)
+  IO.println s!"\n{accepted.length} suggestion(s) validated (close {closed.length}/{gaps.length} gaps). Paste into the example's scenarios:"
+  for s in accepted do
+    IO.println s!"  ⟨{s.id}, {s.uca}, {reprStr s.desc}⟩,"
+  unless remaining.isEmpty do
+    IO.println s!"\nstill uncovered: {String.intercalate ", " (remaining.map fun u => s!"UCA{u.id}")}"
+  return if remaining.isEmpty then (0 : UInt32) else 1
+
 def runList : IO UInt32 := do
   for e in Examples.registry do
     let extras := [if e.cs.isSome then some "control structure" else none,
@@ -312,6 +416,7 @@ def main (args : List String) : IO UInt32 := do
     | ["diff", o, n] => runDiff o n false
     | ["diff", o, n, "--markdown"] => runDiff o n true
     | "validate" :: rest => runValidate rest
+    | "suggest" :: name :: rest => runSuggest name rest
     | "render" :: name :: rest => runRender name rest
     | [] | ["--help"] | ["-h"] | ["help"] => IO.println usage; return (0 : UInt32)
     | _ => IO.eprintln usage; return (2 : UInt32)
