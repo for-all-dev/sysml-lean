@@ -49,6 +49,12 @@ Two layers over a shared core, with STPA on top:
   coverage gaps, broken traces, open loops, and authority cycles.
   `(check, subject)` is the stable identity used to diff findings across
   revisions.
+- **`Sysml.Soundness`** — the findings engine and the checker are separate
+  code paths, and this module proves they cannot disagree:
+  `clean_iff_wellFormed` (no findings ⟺ well-formed, one lemma per
+  producer) and `docFindings_eq_nil_iff_wellTyped` (no document findings ⟺
+  the Prop-level typing judgment). An empty findings list is a certificate,
+  not a hope.
 - **`Sysml.Report`** — the analysis as a markdown report: the full artifact
   chain as tables with traceability columns, plus verification status lines.
 - **`Sysml.Gsn`** — the artifact chain as a Goal Structuring Notation

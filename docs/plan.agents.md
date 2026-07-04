@@ -22,9 +22,13 @@ work. Update statuses in place as steps land.
 1. [x] **Findings engine** (`Sysml/Findings.lean`): structured `Finding`s
    (check id, severity error|warning|info, subject, message) for orphaned
    UCAs, unconstrained hazards, coverage gaps, broken traces, open loops,
-   authority cycles, scenario gaps (info). `Analysis.findings`,
-   `Analysis.clean`. Stretch still open: prove `clean ↔ wellFormed`
-   (spot-checked in Tests.lean for now).
+   authority cycles, scenario gaps. `Analysis.findings`, `Analysis.clean`.
+   Stretch DONE (`Sysml/Soundness.lean`): `clean_iff_wellFormed` proves the
+   diagnostics and the checker cannot disagree — one lemma per producer,
+   plus `docFindings_eq_nil_iff_wellTyped` connecting diagnostics to the
+   Prop-level type system. The control-structure checks were restructured
+   to *derive from violation lists* (`authorityViolations`,
+   `openLoopPairs`), making check/findings agreement definitional there.
 2. [x] **`sysml check [--json]`**: per-example verdicts
    `{name, ok, findings: [...]}`; human output lists findings; exit 1 on
    error findings.
@@ -55,8 +59,8 @@ work. Update statuses in place as steps land.
   hierarchical authority; published UCA tables to check for orphans).
 - Formal UCA contexts (Thomas): typed process-model variables; completeness
   as case exhaustiveness. This is also a product feature (better findings).
-- Step-4 loss scenarios with causal-factor structure; promote
-  `scenariosCover` into `wellFormed`.
+- Step-4 loss scenarios with causal-factor structure (`scenariosCover` —
+  existence per UCA — is now enforced in `wellFormed`; structure remains).
 - Behavioral LTS semantics linking document typing to model reachability
   (second paper).
 - Verso literate paper extraction from `Sysml/Typing.lean`.

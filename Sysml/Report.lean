@@ -57,8 +57,7 @@ def Analysis.toMarkdown (a : Analysis) (title : String := "STPA report") : Strin
     ++ "\n## Loss scenarios\n\n| id | uca | scenario |\n|---|---|---|\n"
     ++ String.join scenarios
     ++ "\n## Verification\n\n"
-    ++ s!"- document well-typed (traceable, covered, no orphaned UCAs): `{a.docWellFormed}`\n"
+    ++ s!"- document well-typed (traceable, covered, no orphaned UCAs, scenarios total): `{a.docWellFormed}`\n"
     ++ s!"- analysis well-formed (incl. model + control structure): `{a.wellFormed}`\n"
-    ++ s!"- loss-scenario coverage (step 4, optional): `{a.scenariosCover}`\n"
 
 end Sysml.Stpa

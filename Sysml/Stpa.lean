@@ -106,27 +106,42 @@ def authorityEdges (cs : ControlStructure) (m : Model) : List (ElementId × Elem
   (cs.controlEdges m).filter fun (s, t) =>
     cs.roleOf? s = some .controller && cs.roleOf? t = some .controller
 
-/-- The authority relation is a DAG: no controller commands itself, directly
-or transitively (docs/stpa-typesystem.pdf §1). Detected per edge: an edge
-`s → t` closing a cycle is exactly one where `t` reaches back to `s` (or
-`s = t`). -/
-def authorityAcyclic (cs : ControlStructure) (m : Model) : Bool :=
+/-- Authority edges that close a command cycle: an edge `s → t` where
+`t` reaches back to `s` (or `s = t`). -/
+def authorityViolations (cs : ControlStructure) (m : Model) :
+    List (ElementId × ElementId) :=
   let auth := cs.authorityEdges m
-  auth.all fun (s, t) => s ≠ t && !reachable auth t s
+  auth.filter fun e => e.1 = e.2 || reachable auth e.2 e.1
+
+/-- The authority relation is a DAG: no controller commands itself, directly
+or transitively (docs/stpa-typesystem.pdf §1). Defined as the absence of
+violations, so the check and the findings that explain it cannot drift
+(`Sysml.Soundness`). -/
+def authorityAcyclic (cs : ControlStructure) (m : Model) : Bool :=
+  (cs.authorityViolations m).isEmpty
+
+/-- Open loops: (controller, process) pairs where the controller can
+influence the process via control paths but no feedback path chain leads
+back. -/
+def openLoopPairs (cs : ControlStructure) (m : Model) :
+    List (ElementId × ElementId) :=
+  cs.roles.flatMap fun cr =>
+    if cr.2 = .controller then
+      cs.roles.filterMap fun pr =>
+        if pr.2 = .controlledProcess
+            && reachable (cs.controlEdges m) cr.1 pr.1
+            && !reachable (cs.feedbackEdges m) pr.1 cr.1 then
+          some (cr.1, pr.1)
+        else none
+    else []
 
 /-- The defining property of a *closed* control loop: whenever a controller
 can influence a process via control paths, some feedback path chain leads
 back from that process to that controller (STPA Handbook §2.2; a controller
-without feedback cannot enforce safety constraints). -/
+without feedback cannot enforce safety constraints). Defined as the absence
+of open loops. -/
 def controlLoopsClosed (cs : ControlStructure) (m : Model) : Bool :=
-  cs.roles.all fun (c, rc) =>
-    if rc = .controller then
-      cs.roles.all fun (p, rp) =>
-        if rp = .controlledProcess then
-          !(reachable (cs.controlEdges m) c p)
-          || reachable (cs.feedbackEdges m) p c
-        else true
-    else true
+  (cs.openLoopPairs m).isEmpty
 
 /-- All structural conditions on a control structure: role and path
 well-kindedness, an acyclic authority hierarchy, and closed control loops. -/
@@ -298,8 +313,9 @@ def scenariosTraceable (a : Analysis) : Bool :=
   a.scenarios.all fun s => a.ucas.any (·.id = s.uca)
 
 /-- Scenario totality (STPA step 4): every UCA has ≥ 1 loss scenario.
-Deliberately *not* part of `wellFormed` yet — scenarios are elaborated in a
-later sprint — but exposed so an analysis can opt into full step-4 coverage. -/
+Scenarios are still informal descriptions (causal-factor structure is a
+later sprint), but their *existence* per UCA is method-mandated (STPA
+Handbook step 4) and enforced. -/
 def scenariosCover (a : Analysis) : Bool :=
   a.ucas.all fun u => a.scenarios.any (·.uca = u.id)
 
@@ -316,6 +332,7 @@ def docWellFormed (a : Analysis) : Bool :=
   && a.requirementsTraceable
   && a.ucasRefined
   && a.scenariosTraceable
+  && a.scenariosCover
 
 /-- The whole analysis is well-formed: the model is well-formed SysML, the
 control structure is a closed-loop structure with an acyclic authority

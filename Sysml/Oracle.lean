@@ -72,7 +72,7 @@ def validateText (jar : System.FilePath) (name : String) (source : String) :
       { cmd := "java", args := #["-jar", jar.toString, "-i", file.toString] }
     let combined := out.stdout ++ out.stderr
     let failed := out.exitCode != 0 || (combined.splitOn "[ERROR]").length > 1
-    return { ok := !failed, output := combined.trim }
+    return { ok := !failed, output := combined.trimAscii.toString }
 
 /-- Render a model with our emitter and validate the result. -/
 def validateModel (jar : System.FilePath) (name : String) (m : Model) :

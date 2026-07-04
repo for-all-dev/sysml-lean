@@ -75,13 +75,13 @@ def checks : List (String × Bool) :=
       !cycleCs.authorityAcyclic cycleModel && !cycleCs.wellFormed cycleModel),
     ("insulin pump authority is acyclic",
       pumpCs.authorityAcyclic pumpModel),
-    ("step-4 scenario gap visible via optional judgment",
-      !analysis.scenariosCover),
+    ("step-4 scenario gap detected (totality)",
+      let gappy : Analysis := { analysis with scenarios := analysis.scenarios.take 2 }
+      !gappy.scenariosCover && !gappy.docWellFormed
+      && (gappy.findings.filter (·.check = "uca-no-scenario")).length == 2),
     -- findings engine
-    ("clean analysis: only info findings (step-4 gaps)",
-      analysis.clean
-      && (analysis.findings.all (·.check = "uca-no-scenario"))
-      && analysis.findings.length == 2),
+    ("clean analysis: no findings",
+      analysis.clean && analysis.findings.isEmpty),
     ("orphaned UCA yields uca-orphaned finding",
       let orphaned : Analysis := { analysis with requirements := [] }
       (orphaned.findings.filter (·.check = "uca-orphaned")).length == 4

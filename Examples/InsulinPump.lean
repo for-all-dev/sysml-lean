@@ -133,10 +133,14 @@ def requirements : List Requirement := [
     ucas := [4] }
 ]
 
-/-- STPA step 4 (initial): loss scenarios explaining how UCAs could occur. -/
+/-- STPA step 4 (initial): loss scenarios explaining how each UCA could
+occur. Coverage (≥ 1 scenario per UCA) is enforced by `scenariosCover`;
+causal-factor structure is a later sprint. -/
 def scenarios : List Scenario := [
   ⟨1, 2, "CGM sensor bias reads high while actual glucose is low; controller commands a bolus from a stale process model"⟩,
-  ⟨2, 1, "readingFlow drops out; controller waits on feedback and never commands insulin despite sustained hyperglycemia"⟩
+  ⟨2, 1, "readingFlow drops out; controller waits on feedback and never commands insulin despite sustained hyperglycemia"⟩,
+  ⟨3, 3, "mealtime rise arrives while the controller is in a backoff interval after a comms retry storm; bolus command is issued late"⟩,
+  ⟨4, 4, "pump motor sticks in the delivering state after the commanded dose completes; no delivery-stopped feedback exists to detect it"⟩
 ]
 
 /-- The assembled STPA analysis. -/

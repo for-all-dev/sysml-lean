@@ -61,6 +61,10 @@ def UcaRefined (a : Analysis) (u : Uca) : Prop :=
 def ScenarioOk (a : Analysis) (s : Scenario) : Prop :=
   ∃ u ∈ a.ucas, u.id = s.uca
 
+/-- Scenario totality (STPA step 4): some loss scenario explains `u`. -/
+def UcaExplained (a : Analysis) (u : Uca) : Prop :=
+  ∃ s ∈ a.scenarios, s.uca = u.id
+
 /-! ## The document judgment -/
 
 /-- `⊢ a ok`: every artifact is well-kinded and referentially intact, every
@@ -75,6 +79,7 @@ structure WellTyped (a : Analysis) : Prop where
   requirements_ok : ∀ r ∈ a.requirements, RequirementOk a r
   ucas_refined : ∀ u ∈ a.ucas, UcaRefined a u
   scenarios_ok : ∀ s ∈ a.scenarios, ScenarioOk a s
+  ucas_explained : ∀ u ∈ a.ucas, UcaExplained a u
 
 /-! ## Reflection: the checker decides the judgment -/
 
@@ -82,13 +87,11 @@ namespace Analysis
 
 theorem hazardsTraceable_iff (a : Analysis) :
     a.hazardsTraceable = true ↔ ∀ h ∈ a.hazards, HazardOk a h := by
-  simp [hazardsTraceable, HazardOk, List.all_eq_true, List.any_eq_true,
-    List.isEmpty_iff, and_assoc]
+  simp [hazardsTraceable, HazardOk, List.all_eq_true, List.any_eq_true]
 
 theorem constraintsTraceable_iff (a : Analysis) :
     a.constraintsTraceable = true ↔ ∀ c ∈ a.constraints, ConstraintOk a c := by
-  simp [constraintsTraceable, ConstraintOk, List.all_eq_true, List.any_eq_true,
-    List.isEmpty_iff, and_assoc]
+  simp [constraintsTraceable, ConstraintOk, List.all_eq_true, List.any_eq_true]
 
 theorem hazardsConstrained_iff (a : Analysis) :
     a.hazardsConstrained = true ↔ ∀ h ∈ a.hazards, HazardConstrained a h := by
@@ -98,7 +101,7 @@ theorem hazardsConstrained_iff (a : Analysis) :
 theorem ucasTraceable_iff (a : Analysis) :
     a.ucasTraceable = true ↔ ∀ u ∈ a.ucas, UcaOk a u := by
   simp [ucasTraceable, UcaOk, List.all_eq_true, List.any_eq_true,
-    List.isEmpty_iff, and_assoc]
+    and_assoc]
 
 theorem ucasCover_iff (a : Analysis) :
     a.ucasCover = true ↔
@@ -110,7 +113,7 @@ theorem requirementsTraceable_iff (a : Analysis) :
   simp only [requirementsTraceable, RequirementOk, List.all_eq_true]
   refine forall_congr' fun r => forall_congr' fun _ => ?_
   cases hr : r.element <;>
-    simp [hr, List.all_eq_true, List.any_eq_true, List.isEmpty_iff, and_assoc]
+    simp [List.all_eq_true, List.any_eq_true, and_assoc]
 
 theorem ucasRefined_iff (a : Analysis) :
     a.ucasRefined = true ↔ ∀ u ∈ a.ucas, UcaRefined a u := by
@@ -120,6 +123,10 @@ theorem scenariosTraceable_iff (a : Analysis) :
     a.scenariosTraceable = true ↔ ∀ s ∈ a.scenarios, ScenarioOk a s := by
   simp [scenariosTraceable, ScenarioOk, List.all_eq_true, List.any_eq_true]
 
+theorem scenariosCover_iff (a : Analysis) :
+    a.scenariosCover = true ↔ ∀ u ∈ a.ucas, UcaExplained a u := by
+  simp [scenariosCover, UcaExplained, List.all_eq_true, List.any_eq_true]
+
 /-- Soundness and completeness of the checker: `docWellFormed` decides the
 `WellTyped` judgment. -/
 theorem wellTyped_iff (a : Analysis) :
@@ -127,12 +134,12 @@ theorem wellTyped_iff (a : Analysis) :
   simp only [docWellFormed, Bool.and_eq_true, hazardsTraceable_iff,
     constraintsTraceable_iff, hazardsConstrained_iff, ucasTraceable_iff,
     ucasCover_iff, requirementsTraceable_iff, ucasRefined_iff,
-    scenariosTraceable_iff]
+    scenariosTraceable_iff, scenariosCover_iff]
   constructor
-  · rintro ⟨⟨⟨⟨⟨⟨⟨h₁, h₂⟩, h₃⟩, h₄⟩, h₅⟩, h₆⟩, h₇⟩, h₈⟩
-    exact ⟨h₁, h₂, h₃, h₄, h₅, h₆, h₇, h₈⟩
-  · rintro ⟨h₁, h₂, h₃, h₄, h₅, h₆, h₇, h₈⟩
-    exact ⟨⟨⟨⟨⟨⟨⟨h₁, h₂⟩, h₃⟩, h₄⟩, h₅⟩, h₆⟩, h₇⟩, h₈⟩
+  · rintro ⟨⟨⟨⟨⟨⟨⟨⟨h₁, h₂⟩, h₃⟩, h₄⟩, h₅⟩, h₆⟩, h₇⟩, h₈⟩, h₉⟩
+    exact ⟨h₁, h₂, h₃, h₄, h₅, h₆, h₇, h₈, h₉⟩
+  · rintro ⟨h₁, h₂, h₃, h₄, h₅, h₆, h₇, h₈, h₉⟩
+    exact ⟨⟨⟨⟨⟨⟨⟨⟨h₁, h₂⟩, h₃⟩, h₄⟩, h₅⟩, h₆⟩, h₇⟩, h₈⟩, h₉⟩
 
 instance (a : Analysis) : Decidable (WellTyped a) :=
   decidable_of_iff (a.docWellFormed = true) (wellTyped_iff a)
