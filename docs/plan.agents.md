@@ -51,20 +51,28 @@ work. Update statuses in place as steps land.
    requirement satisfaction); scenarios as context nodes; certificate
    status as top-level context. Behavioral evidence attachment is the
    later-sprint follow-up.
-7. [~] **LLM-in-the-loop prototype**: `sysml suggest <example> [--llm M]`
+7. [x] **LLM-in-the-loop prototype**: `sysml suggest <example> [--llm M]`
    (decided with Quinn 2026-07-04: claude -p CLI invocation; scope =
    scenarios for uca-no-scenario gaps only). Every candidate is gated by
-   the checker (real gap UCA, traceability preserved) before display;
-   rejected candidates reported as rejected; output is paste-ready Lean.
-   IN PROGRESS — implemented, needs a live run against the wheel-brake
-   faithful fixture (3 scenario gaps) once fixtures land.
+   the checker before display; rejected candidates reported; output is
+   paste-ready Lean. VERIFIED LIVE 2026-07-04 against the wheel-brake
+   faithful fixture: 3/3 gaps closed with plausible, control-structure-
+   grounded causal scenarios, all validated, exit 0.
 
-8. **Case-study fixtures** (in flight via subagent): faithful transcription
-   of the STPA Handbook wheel-brake tables (expected to pin exactly 17
-   findings — the checker quantifying the published example's self-declared
-   incompleteness, incl. the Table 2.3 vs 2.5 UCA-2 hazard-trace
-   inconsistency we found), plus riffs: a certified-total completion and an
-   STPA-Sec extension.
+8. [x] **Case-study fixtures** (via subagent): faithful wheel-brake
+   transcription pinning exactly 17 findings (the checker quantifying the
+   handbook's self-declared incompleteness, incl. the Table 2.3 vs 2.5
+   UCA-2 trace inconsistency), plus riffs: certified-total completion and
+   STPA-Sec extension. 34 tests, oracle round-trips on all three models.
+
+9. [~] **GitHub Marketplace action** (in flight via subagent): TypeScript
+   action at repo root (action.yml + action/dist), wrapping check → base/
+   head diff → sticky comment → fail-on-regression, with elan bootstrap
+   and optional checksum-pinned oracle fetch.
+
+10. **Interop** (research in flight via subagent → docs/interop.agents.md):
+    maximal interop with the off-the-shelf SysML/MBSE ecosystem (Astah
+    System Safety, SysML v2 API & Services, ReqIF, SACM, ODE/DDI, CSV).
 
 ## Backlog: paper track (secondary)
 
